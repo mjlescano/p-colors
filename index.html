@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>{p}</title>
+
+    <style media="screen">
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+      }
+
+      .photo-wrapper {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      .photo {
+        position: relative;
+      }
+
+      @media all and (orientation: landscape) {
+        .photo {
+          width: 65vh;
+          height: 65vh;
+        }
+      }
+
+      @media all and (orientation: portrait) {
+        .photo {
+          width: 65vw;
+          height: 65vw;
+        }
+      }
+
+      .background {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-size: cover;
+        background-position: center center;
+        filter: grayscale(100%) contrast(120%) brightness(1.4);
+      }
+
+      .colors {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      .color {
+        margin: .97%;
+        width: 20%;
+        height: 5%;
+      }
+
+      canvas {
+        position: fixed;
+        left: 0;
+        top: 0;
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="photo-wrapper" data-color-extract="/photos/1.jpg"></div>
+    <div class="photo-wrapper" data-color-extract="/photos/2.jpg"></div>
+    <div class="photo-wrapper" data-color-extract="/photos/3.jpg"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.0.1/color-thief.min.js"></script>
+    <script src="https://unpkg.com/tinycolor2@1.4.1"></script>
+    <script src="https://unpkg.com/caman@4.1.2"></script>
+    <script src="https://unpkg.com/domator@1.1.2/dist/domator.min.js"></script>
+
+    <script>
+      window.addEventListener('load', function onLoad (event){
+        window.removeEventListener('load', onLoad, false)
+        init()
+      }, false)
+
+      function init () {
+        Caman.Event.unlisten = function unlisten (type, fn) {
+          const events = Caman.Event.events[type]
+          if (!events) return
+          const index = events.findIndex((e) => e.fn === fn)
+          if (index === -1) return
+          events.splice(index, 1)
+        }
+
+        const els = document.querySelectorAll('[data-color-extract]')
+
+        Array.prototype.forEach.call(els, (el) => {
+          const url = el.getAttribute('data-color-extract')
+
+          const canvas = domator('canvas')
+
+          el.appendChild(canvas)
+
+          getDominantColors(canvas, url, (err, hexas) => {
+            if (err) throw err
+
+            const photo = domator('.photo', [
+              `.background[style="background-image: url('${url}')"]`,
+              '.colors', hexas.map((hex) => {
+                return `.color[style="background-color: ${hex}"]`
+              })
+            ])
+
+            el.appendChild(photo)
+          })
+        })
+
+        function getDominantColors (canvas, url, cb) {
+          const image = Caman(canvas, url, function () {
+            this.vibrance(100).saturation(10).exposure(20).render()
+          })
+
+          Caman.Event.listen('renderFinished', function onRender () {
+            if (!this.c === image) return
+
+            Caman.Event.unlisten('renderFinished', onRender)
+
+            requestAnimationFrame(() => {
+              const colorThief = new ColorThief()
+
+              const hexas = colorThief.getPalette(image.canvas, 5).map((c) => {
+                return tinycolor({r: c[0], g: c[1], b: c[2]})
+              }).sort(function(c1, c2) {
+                return c1.toHsv().h - c2.toHsv().h
+              }).map((c) => c.toHexString()).reverse()
+
+              cb(null, hexas)
+            })
+          })
+        }
+      }
+    </script>
+  </body>
+</html>
